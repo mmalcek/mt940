@@ -11,7 +11,7 @@ type Statement struct {
 	Transactions []map[string]string
 }
 
-func (s *Statement) Parse(file []byte) (Statement, error) {
+func Parse(file []byte) (Statement, error) {
 	return parseFile(string(file))
 }
 
