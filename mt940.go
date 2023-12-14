@@ -29,16 +29,16 @@ func parseFile(file string) (Statement, error) {
 			// if transaction
 			if file[mi[i][0]+3:mi[i][1]-1] == "61" {
 				tran := make(map[string]string)
-				tran[file[mi[i][0]+3:mi[i][1]-1]] = file[mi[i][1] : mi[i+1][0]-1]
+				tran[file[mi[i][0]+3:mi[i][1]-1]] = file[mi[i][1]:mi[i+1][0]]
 				// if include line 86
 				if file[mi[i+1][0]+3:mi[i+1][1]-1] == "86" {
-					tran[file[mi[i+1][0]+3:mi[i+1][1]-1]] = file[mi[i+1][1] : mi[i+2][0]-1]
+					tran[file[mi[i+1][0]+3:mi[i+1][1]-1]] = file[mi[i+1][1]:mi[i+2][0]]
 					i++
 				}
 				sta.Transactions = append(sta.Transactions, tran)
 				continue
 			} else {
-				sta.Fields[file[mi[i][0]+3:mi[i][1]-1]] = file[mi[i][1] : mi[i+1][0]-1]
+				sta.Fields[file[mi[i][0]+3:mi[i][1]-1]] = file[mi[i][1]:mi[i+1][0]]
 			}
 		} else {
 			eol := strings.Index(file[mi[i][1]:], "\r\n")
