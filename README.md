@@ -5,12 +5,14 @@ Parse mt940 message to struct
 ```go
 type Statement struct {
 	Header       string
-	Fields       map[string]string
-	Transactions []map[string]string
+	Fields       map[string]interface{}
+	Transactions []map[string]interface{}
 }
 ```
-eg: Fields -> [25]:C343201CZK2382150,25
-
+- eg: 
+```go
+fmt.Println(statement.Fields["F_20"])
+```
 
 ## usage
 ```go
@@ -33,7 +35,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(statement.Header)
+	fmt.Println(statement.Fields["F_20"])
 }
 ```
 
