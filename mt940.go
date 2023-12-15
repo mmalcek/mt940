@@ -47,3 +47,20 @@ func parseFile(file string) (Statement, error) {
 	}
 	return sta, nil
 }
+
+/* TODO:
+- Field 86 may appears alone - edit in parser
+"As a starting point, field 86 is used to supply extra information related to the preceding statement line in file 61.
+However, a separate field 86 can also be supplied.
+If other channels than SWIFT NET FIN are used as receiving channel - the first instance of field 86 may contain general information about the account being part of a Group Cash Pool arrangement. This instance is not related to a statement line.
+If SWIFT NET FIN is used as receiving channel, the same information may be given as a last Instance of field 86, which is not related to a statement line.
+"
+
+- check specification if header fields can repeat and update parser
+e.g.
+:28C: 00532/001 (First message of statement 532)
+:28C: 00532/002 (Second message of statement 532)
+
+- make optional "deepParser" that parse fields by common specification as per example specs in ./docs/MT940_Structured.pdf
+
+*/
