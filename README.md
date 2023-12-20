@@ -1,20 +1,21 @@
 # mt940
 Parse mt940 message to struct
+- Package don't handle any logic on fields level it just simply returns struct with all fields from mt940 message as strings.
 
-- Package don't handle any logic on fields level it just simply returns struct with all fields from mt940 message.
+## this package is developed for [BaFi](https://github.com/mmalcek/bafi) project
+BaFi allows additional parsing on fields level and create formated output using go templates
+https://github.com/mmalcek/bafi
+
+### struct
 ```go
-type Statement struct {
-	Header       string
-	Fields       map[string]interface{}
-	Transactions []map[string]interface{}
+type tMessage struct {
+	Header       string // Message header {1:......{4:
+	Fields       map[string]interface{} // :20:......, :25:......, ...
+	Transactions []map[string]interface{} // []{:61:......, :86:......}
 }
 ```
-- eg: 
-```go
-fmt.Println(statement.Fields["F_20"])
-```
 
-## usage
+### example
 ```go
 package main
 
@@ -31,12 +32,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	statement, err := mt940.Parse(file)
+	message, err := mt940.Parse(file)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(statement.Fields["F_20"])
+	fmt.Println(message.Fields["F_20"])
 }
 ```
-
-- Note: Currently in development. There are no any validations or result checks. So use it on your own risk.
+- Parse multiple messages in one file (eg: Multicash)
+```go
+messages, err := mt940.ParseMultimessage(file, "\r\n$\r\n") // message separator = "\r\n$\r\n"
+```
