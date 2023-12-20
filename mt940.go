@@ -1,66 +1,107 @@
 package mt940
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 )
 
-type Statement struct {
+// TODO: Add unit tests
+
+type tMessage struct {
 	Header       string
 	Fields       map[string]interface{}
 	Transactions []map[string]interface{}
 }
 
-func Parse(file []byte) (Statement, error) {
-	return parseFile(string(file))
+// Parse parses SWIFT message and returns tMessage struct
+func Parse(data []byte) (tMessage, error) {
+	return parseMessage(string(data))
 }
 
-func parseFile(file string) (Statement, error) {
-	// TODO: add values basic validation
-	re := regexp.MustCompile(`\r\n:\w{2,3}:`)
-	mi := re.FindAllStringIndex(file, -1)
-	sta := Statement{
-		Fields:       make(map[string]interface{}),
-		Transactions: make([]map[string]interface{}, 0),
+// ParseMultimessage parses SWIFT multimessage and returns slice of tMessage structs
+// separator is a string that separates messages e.g. "\r\n$\r\n"
+func ParseMultimessage(data []byte, separator string) ([]tMessage, error) {
+	messages := strings.Split(string(data), separator)
+	var messagesParsed []tMessage
+	for _, message := range messages {
+		messageParsed, err := parseMessage(message)
+		if err != nil {
+			return messagesParsed, err
+		}
+		messagesParsed = append(messagesParsed, messageParsed)
 	}
-	sta.Header = file[:strings.Index(file, "\r\n")]
-	for i := 0; i < len(mi); i++ {
+	return messagesParsed, nil
+}
+
+// parseMessage parses SWIFT message and returns tMessage struct
+func parseMessage(data string) (tMessage, error) {
+	message := tMessage{Fields: make(map[string]interface{}), Transactions: make([]map[string]interface{}, 0)}
+	header, headerEnd, err := getHeaderLine(&data) // get header
+	if err != nil {
+		return message, err
+	}
+	message.Header = header
+	messageEnd := strings.Index(data, "\r\n-}") // Find End of message
+	if messageEnd == -1 {
+		return message, fmt.Errorf("messageEndNotFound")
+	}
+	data = data[headerEnd:messageEnd]  // get pure message
+	fields, err := getAllFields(&data) // get all fields
+	if err != nil {
+		return message, err
+	}
+	sortFields(fields, &message) // sort fields to message struct
+	return message, nil
+}
+
+// getHeaderLine returns header line from SWIFT message
+func getHeaderLine(data *string) (header string, eol int, err error) {
+	sol := strings.Index(*data, "{1:") // find Start of header
+	if sol == -1 {
+		return "", -1, fmt.Errorf("headerStartNotFound")
+	}
+	eol = strings.Index((*data)[sol:], "{4:\r\n") + 3 // find End of header
+	if eol == 2 {                                     // -1 + 3(lineAbove) = 2 -> headerEndNotFound
+		return "", -1, fmt.Errorf("headerEndNotFound")
+	}
+	header = (*data)[sol:eol] // get header
+	if header == "" {         // check if header is valid
+		return "", -1, fmt.Errorf("headerNotFound")
+	}
+	return
+}
+
+// getAllFields returns all fields from SWIFT message
+func getAllFields(data *string) (fields []map[string]string, err error) {
+	mi := regexp.MustCompile(`\r\n:\w{2,3}:`).FindAllStringIndex(*data, -1) // find all Start message indexes
+	for i := 0; i < len(mi); i++ {                                          // loop through all fields and add them to fields slice
 		if i < len(mi)-1 {
-			// if transaction
-			if file[mi[i][0]+3:mi[i][1]-1] == "61" {
-				tran := make(map[string]interface{})
-				tran["F_"+file[mi[i][0]+3:mi[i][1]-1]] = file[mi[i][1]:mi[i+1][0]]
-				// if include line 86
-				if file[mi[i+1][0]+3:mi[i+1][1]-1] == "86" {
-					tran["F_"+file[mi[i+1][0]+3:mi[i+1][1]-1]] = file[mi[i+1][1]:mi[i+2][0]]
-					i++
-				}
-				sta.Transactions = append(sta.Transactions, tran)
-				continue
-			} else {
-				sta.Fields["F_"+file[mi[i][0]+3:mi[i][1]-1]] = file[mi[i][1]:mi[i+1][0]]
-			}
+			fields = append(fields, map[string]string{(*data)[mi[i][0]+3 : mi[i][1]-1]: (*data)[mi[i][1]:mi[i+1][0]]})
 		} else {
-			eol := strings.Index(file[mi[i][1]:], "\r\n")
-			sta.Fields["F_"+file[mi[i][0]+3:mi[i][1]-1]] = file[mi[i][1] : mi[i][1]+eol]
+			fields = append(fields, map[string]string{(*data)[mi[i][0]+3 : mi[i][1]-1]: (*data)[mi[i][1]:]})
 		}
 	}
-	return sta, nil
+	if len(fields) == 0 { // check if fields has been found
+		err = fmt.Errorf("fieldsNotFound")
+	}
+	return
 }
 
-/* TODO:
-- Field 86 may appears alone - edit in parser
-"As a starting point, field 86 is used to supply extra information related to the preceding statement line in file 61.
-However, a separate field 86 can also be supplied.
-If other channels than SWIFT NET FIN are used as receiving channel - the first instance of field 86 may contain general information about the account being part of a Group Cash Pool arrangement. This instance is not related to a statement line.
-If SWIFT NET FIN is used as receiving channel, the same information may be given as a last Instance of field 86, which is not related to a statement line.
-"
-
-- check specification if header fields can repeat and update parser
-e.g.
-:28C: 00532/001 (First message of statement 532)
-:28C: 00532/002 (Second message of statement 532)
-
-- make optional "deepParser" that parse fields by common specification as per example specs in ./docs/MT940_Structured.pdf
-
-*/
+// sortFields sorts fields to message struct
+func sortFields(fields []map[string]string, message *tMessage) {
+	for i := 0; i < len(fields); i++ {
+		for k, v := range fields[i] {
+			// If field is 61-Transaction, add it to transactions slice
+			if k == "61" { // check if field is transaction
+				message.Transactions = append(message.Transactions, map[string]interface{}{"F_" + k: v})
+				if i+1 <= len(fields) && fields[i+1]["86"] != "" { // check if field 86-TranDetails is present
+					message.Transactions[len(message.Transactions)-1]["F_86"] = fields[i+1]["86"]
+					i++
+				}
+				continue
+			}
+			message.Fields["F_"+k] = v // add field to fields map
+		}
+	}
+}
