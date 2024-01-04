@@ -22,7 +22,7 @@ func Parse(data []byte) (tMessage, error) {
 // ParseMultimessage parses SWIFT multimessage and returns slice of tMessage structs
 // separator is a string that separates messages e.g. "\r\n$\r\n"
 func ParseMultimessage(data []byte, separator string) ([]tMessage, error) {
-	messages := strings.Split(string(data), separator)
+	messages := strings.SplitAfter(string(data), separator)
 	var messagesParsed []tMessage
 	for _, message := range messages {
 		messageParsed, err := parseMessage(message)
